@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DB Suite</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script defer src="https://cdn.jsdelivr.net/npm/@viz-js/viz@3.2.4/lib/viz-standalone.js"></script>
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="DB Suite home">
+      <span class="brand-name">DB <span>Suite</span></span>
+    </a>
+    <nav class="tool-nav" role="tablist" aria-label="Database tools">
+      <button id="erdTab" role="tab" aria-selected="true" aria-controls="erdPanel">ERD Generator</button>
+      <button id="mapperTab" role="tab" aria-selected="false" aria-controls="mapperPanel" tabindex="-1">ER Mapper</button>
+      <button id="queriesTab" role="tab" aria-selected="false" aria-controls="queriesPanel" tabindex="-1">Dataset Queries</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="erdPanel" class="tool-panel" role="tabpanel" aria-labelledby="erdTab">
+      <div class="workspace-heading">
+        <div><h1>ERD Generator</h1><p>Describe a database or edit its schema, then explore the diagram.</p></div>
+      </div>
+      <div class="workspace">
+        <aside class="workspace-sidebar">
+          <div id="erdStatus" class="status" role="status" aria-live="polite" hidden></div>
+          <section class="form-section">
+            <h2>Describe your database</h2>
+            <label class="sr-only" for="descInput">Database requirements</label>
+            <textarea id="descInput" rows="5" placeholder="A university has Students and Courses. Students enroll in Courses..."></textarea>
+            <div class="button-row">
+              <button id="btnGenerate">Generate ERD</button>
+              <button id="btnSamplePrompt" class="secondary">Use sample</button>
+            </div>
+          </section>
+          <section class="form-section grow-section">
+            <h2>ER schema JSON</h2>
+            <label class="sr-only" for="erdJsonInput">ER schema JSON</label>
+            <textarea id="erdJsonInput" class="code-input" placeholder="Generated schema appears here, or paste ER schema JSON..."></textarea>
+            <div class="button-row">
+              <button id="btnErdRender" class="secondary">Render diagram</button>
+              <button id="btnErdCopy" class="secondary">Copy JSON</button>
+            </div>
+            <details class="schema-guide">
+              <summary>ER schema JSON guide</summary>
+              <div class="schema-guide-content">
+                <p>Use this format in the editor or ER Mapper. Optional flags can be left out when they are false.</p>
+                <pre><code>{
+  "entities": [
+    {
+      "name": "Employee",
+      "attributes": [
+        { "name": "EmployeeID", "isPrimaryKey": true },
+        { "name": "Name" },
+        { "name": "Contact", "composite": ["Email", "Phone"] }
+      ]
+    },
+    {
+      "name": "Department",
+      "attributes": [
+        { "name": "DepartmentID", "isPrimaryKey": true },
+        { "name": "Name" }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "WorksFor",
+      "participantEntities": [
+        { "entityName": "Employee", "cardinality": "N", "participation": "total" },
+        { "entityName": "Department", "cardinality": "1", "participation": "partial" }
+      ],
+      "attributes": [{ "name": "StartDate" }]
+    }
+  ]
+}</code></pre>
+                <ul>
+                  <li>Each entity needs a <code>name</code> and an <code>attributes</code> array. Give regular entities a primary key with <code>"isPrimaryKey": true</code>.</li>
+                  <li>Attribute flags are <code>isPrimaryKey</code>, <code>isMultiValued</code>, and <code>isDerived</code>. A <code>composite</code> list can contain names or nested attribute objects.</li>
+                  <li>Weak entities use <code>"isWeak": true</code> and a non-empty <code>partialKey</code> list.</li>
+                  <li>Relationships need a <code>name</code> and <code>participantEntities</code>. Each participant has an <code>entityName</code>, a cardinality such as <code>1</code> or <code>N</code>, and <code>total</code> or <code>partial</code> participation.</li>
+                  <li>Set <code>"isIdentifying": true</code> for an identifying relationship; it must connect at least two participants. Relationship <code>attributes</code> are optional.</li>
+                </ul>
+              </div>
+            </details>
+          </section>
+        </aside>
+        <section class="output-panel" aria-label="ER diagram preview">
+          <div class="output-heading"><h2>Diagram preview</h2><div class="output-controls">
+            <label for="engineSelect">Layout</label>
+            <select id="engineSelect"><option value="dot">Hierarchical</option><option value="fdp">Organic</option><option value="neato">Spring</option></select>
+            <button class="icon-button" data-zoom="erd" data-step="in" aria-label="Zoom in">+</button>
+            <button class="icon-button" data-zoom="erd" data-step="out" aria-label="Zoom out">−</button>
+            <button class="secondary compact" data-zoom="erd" data-step="reset">Reset</button>
+            <span id="erdDiagramInfo" class="diagram-info">Ready</span>
+          </div></div>
+          <div class="viewport" id="erdViewport"><div id="erdDiagramCanvas" class="diagram-canvas"><p class="empty-state">Generate an ERD or render schema JSON to see the diagram here.</p></div></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="mapperPanel" class="tool-panel" role="tabpanel" aria-labelledby="mapperTab" hidden>
+      <div class="workspace-heading">
+        <div><h1>ER Mapper</h1><p>Turn an ER schema into its relational tables and keys.</p></div>
+      </div>
+      <div class="workspace">
+        <aside class="workspace-sidebar">
+          <div id="mapperStatus" class="status" role="status" aria-live="polite" hidden></div>
+          <section class="form-section grow-section">
+            <h2>ER schema JSON</h2>
+            <label for="erdFile">Load a JSON file</label>
+            <input id="erdFile" type="file" accept=".json,application/json">
+            <label class="sr-only" for="jsonInput">ER schema JSON</label>
+            <textarea id="jsonInput" class="code-input" placeholder="Paste ER schema JSON or load a file..."></textarea>
+            <div class="button-row"><button id="btnRender">Convert to relational model</button><button id="btnCopy" class="secondary">Copy JSON</button></div>
+            <details class="schema-guide">
+              <summary>ER schema JSON guide</summary>
+              <div class="schema-guide-content">
+                <p>The Mapper accepts the same ER schema format produced by the ERD Generator. Paste it here or load a <code>.json</code> file.</p>
+                <pre><code>{
+  "entities": [
+    {
+      "name": "Employee",
+      "attributes": [
+        { "name": "EmployeeID", "isPrimaryKey": true },
+        { "name": "Name" }
+      ]
+    }
+  ],
+  "relationships": []
+}</code></pre>
+                <ul>
+                  <li>The top level must contain <code>entities</code> and <code>relationships</code> arrays.</li>
+                  <li>Each entity needs a <code>name</code> and <code>attributes</code> array. Include a primary key for regular entities.</li>
+                  <li>For weak entities, set <code>isWeak</code> to <code>true</code> and provide a non-empty <code>partialKey</code> array.</li>
+                  <li>Relationship participants refer to entities by name and include <code>cardinality</code> and <code>participation</code> (<code>total</code> or <code>partial</code>).</li>
+                </ul>
+              </div>
+            </details>
+          </section>
+        </aside>
+        <section class="output-panel" aria-label="Relational model preview">
+          <div class="output-heading"><h2>Relational model</h2><div class="output-controls">
+            <button id="btnZoomIn" class="icon-button" aria-label="Zoom in">+</button><button id="btnZoomOut" class="icon-button" aria-label="Zoom out">−</button><button id="btnReset" class="secondary compact">Reset</button><span id="diagramInfo" class="diagram-info">Ready</span>
+          </div></div>
+          <div class="viewport" id="viewport"><div id="diagramCanvas" class="diagram-canvas"><p class="empty-state">Convert an ER schema to see its relational model here.</p></div></div>
+          <details class="schema-details"><summary>Relational schema JSON</summary><pre id="schemaOutput"></pre></details>
+        </section>
+      </div>
+    </section>
+
+    <section id="queriesPanel" class="tool-panel" role="tabpanel" aria-labelledby="queriesTab" hidden>
+      <div class="workspace-heading">
+        <div><h1>Dataset Queries</h1><p>Run relational algebra operations against your JSON dataset.</p></div>
+      </div>
+      <div class="workspace">
+        <aside class="workspace-sidebar">
+          <div id="queriesStatus" class="status" role="status" aria-live="polite" hidden></div>
+          <section class="form-section grow-section">
+            <h2>Dataset</h2>
+            <label for="datasetFile">Load a JSON file</label>
+            <input id="datasetFile" type="file" accept=".json,application/json">
+            <label class="sr-only" for="datasetsInput">Dataset JSON</label>
+            <textarea id="datasetsInput" class="code-input dataset-input" placeholder="Paste an object mapping table names to row arrays..."></textarea>
+            <label for="expressionInput">Query expression</label>
+            <textarea id="expressionInput" rows="3" placeholder="PROJECT Name FROM Employee"></textarea>
+            <button id="btnQuery">Execute query</button>
+            <details class="syntax-guide">
+              <summary>Query syntax</summary>
+              <div class="syntax-guide-content">
+                <p><code>SELECT WHERE Salary &gt; 5000 FROM Employee</code> filters rows.</p>
+                <p><code>PROJECT Name, Salary FROM Employee</code> chooses columns.</p>
+                <p><code>RENAME Name TO EmployeeName FROM Employee</code> renames a column.</p>
+                <p><code>JOIN A, B ON DeptID = DepartmentID</code> joins relations.</p>
+                <p><code>A UNION B</code>, <code>A INTERSECT B</code>, <code>A DIFFERENCE B</code> combine them.</p>
+                <p><code>AGGREGATE DeptID FROM Employee BY SUM(Salary)</code> groups and calculates. Functions: SUM, AVG, MIN, MAX, COUNT.</p>
+                <p>Comparisons support =, !=, &gt;, &lt;, &gt;=, &lt;=. Join inputs need distinct column names; rename collisions first.</p>
+              </div>
+            </details>
+          </section>
+        </aside>
+        <section class="output-panel" aria-label="Query results">
+          <div class="output-heading"><h2>Query result</h2></div>
+          <div id="queryResult" class="result-content" aria-live="polite"><p class="empty-state">Load a dataset and execute a query to see its result.</p></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

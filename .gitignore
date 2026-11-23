@@ -1,0 +1,19 @@
+# Environment variables and local virtual environments
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Python and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# IDE and generated files
+.idea/
+er_diagram

@@ -1,0 +1,7 @@
+flask
+pydantic
+graphviz
+google-genai
+python-dotenv
+ply
+pytest
